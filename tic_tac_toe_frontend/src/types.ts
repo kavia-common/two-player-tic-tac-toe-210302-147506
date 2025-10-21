@@ -76,3 +76,25 @@ export type GameMode = 'HUMAN_VS_HUMAN' | 'HUMAN_VS_AI';
  * AI difficulty levels available.
  */
 export type AIDifficulty = 'EASY' | 'OPTIMAL';
+
+/**
+ * PUBLIC_INTERFACE
+ * ScoreRecord captures the result of a completed game.
+ */
+export interface ScoreRecord {
+  timestamp: string; // ISO 8601 of game end
+  winner: Player | null; // null for draw
+  board: Board; // final board snapshot (immutable)
+}
+
+/**
+ * PUBLIC_INTERFACE
+ * ScoreBoard aggregates totals and a rolling history of recent games.
+ */
+export interface ScoreBoard {
+  xWins: number;
+  oWins: number;
+  draws: number;
+  sessions: number; // number of new-game sessions initiated (optional metric)
+  history: ScoreRecord[]; // append-only history; UI may show last N
+}

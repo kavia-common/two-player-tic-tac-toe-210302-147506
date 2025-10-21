@@ -20,10 +20,12 @@ Validation Protocol: VP-TTT-APP-001
 import React, { useEffect, useMemo, useState } from 'react';
 import './index.css';
 
-import { Board, StatusBar, Controls } from './components';
+import { Board, StatusBar, Controls, ScorePanel } from './components';
 
 import { createInitialState, applyMove } from './lib/game';
 import { appendAudit, getAuditLog, clearAudit } from './lib/audit';
+// @ts-ignore - TS module used in JS
+import { getScores, saveScores, clearScores } from './lib/persistence.ts';
 // @ts-ignore - allow TS import in JS env
 import { nextAIMove } from './lib/ai.ts';
 // @ts-ignore
@@ -49,6 +51,15 @@ function App() {
   const [activeUser, setActiveUser] = useState('X'); // 'X' | 'O'
   // game state
   const [state, setState] = useState(createInitialState());
+  // scoreboard persistence
+  const [scores, setScores] = useState(() => {
+    try {
+      const loaded = getScores();
+      return loaded;
+    } catch {
+      return { xWins: 0, oWins: 0, draws: 0, sessions: 0, history: [] };
+    }
+  });
   // error surface
   const [error, setError] = useState(null);
 
@@ -66,6 +77,14 @@ function App() {
         action: 'CREATE',
         after: state,
         metadata: { component: 'App', message: 'Initial state created' },
+      });
+      // Record we loaded scores from persistence (READ)
+      appendAudit({
+        userId: activeUser,
+        action: 'READ',
+        reason: 'Load scoreboard from persistence',
+        after: scores,
+        metadata: { component: 'App' },
       });
     } catch (e) {
       console.error(e);
@@ -94,6 +113,42 @@ function App() {
     }
   };
 
+  const handleResetScores = (signature) => {
+    try {
+      // Bind signature to delete action
+      appendAudit({
+        userId: activeUser,
+        action: 'SIGN',
+        reason: 'Signature for RESET_SCORES',
+        metadata: { signature },
+      });
+
+      const beforeScores = scores;
+      clearScores();
+      const resetScores = { xWins: 0, oWins: 0, draws: 0, sessions: 0, history: [] };
+      setScores(resetScores);
+
+      appendAudit({
+        userId: activeUser,
+        action: 'DELETE',
+        reason: 'Reset scores by user request',
+        before: beforeScores,
+        after: resetScores,
+        metadata: { component: 'App' },
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unexpected error';
+      setError(message);
+      appendAudit({
+        userId: activeUser,
+        action: 'ERROR',
+        reason: message,
+        before: scores,
+        after: scores,
+      });
+    }
+  };
+
   const onCellClick = (index) => {
     setError(null);
     try {
@@ -114,6 +169,32 @@ function App() {
         after: updated,
         metadata: { index },
       });
+
+      // If the move ended the game, update the scoreboard and persist
+      if (updated.gameOver) {
+        const winner = updated.winner; // 'X' | 'O' | null
+        const beforeScores = scores;
+        const nextScores = {
+          xWins: beforeScores.xWins + (winner === 'X' ? 1 : 0),
+          oWins: beforeScores.oWins + (winner === 'O' ? 1 : 0),
+          draws: beforeScores.draws + (winner ? 0 : 1),
+          sessions: beforeScores.sessions, // incremented on NEW_GAME
+          history: [
+            ...beforeScores.history,
+            { timestamp: new Date().toISOString(), winner, board: updated.board.slice() },
+          ].slice(-50), // keep last 50 records to limit growth
+        };
+        setScores(nextScores);
+        saveScores(nextScores);
+        appendAudit({
+          userId: activeUser,
+          action: 'UPDATE',
+          reason: 'Update scoreboard after game end',
+          before: beforeScores,
+          after: nextScores,
+          metadata: { result: winner ?? 'DRAW' },
+        });
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Unexpected error';
       setError(message);
@@ -147,6 +228,23 @@ function App() {
         before,
         after: fresh,
         reason: 'Start new game',
+      });
+
+      // Update sessions counter and persist
+      const beforeScores = scores;
+      const nextScores = {
+        ...beforeScores,
+        sessions: beforeScores.sessions + 1,
+      };
+      setScores(nextScores);
+      saveScores(nextScores);
+      appendAudit({
+        userId: activeUser,
+        action: 'UPDATE',
+        reason: 'Increment sessions counter for new game',
+        before: beforeScores,
+        after: nextScores,
+        metadata: { field: 'sessions' },
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Unexpected error';
@@ -214,6 +312,31 @@ function App() {
           after: updated,
           metadata: { difficulty, index: idx },
         });
+
+        if (updated.gameOver) {
+          const winner = updated.winner;
+          const beforeScores = scores;
+          const nextScores = {
+            xWins: beforeScores.xWins + (winner === 'X' ? 1 : 0),
+            oWins: beforeScores.oWins + (winner === 'O' ? 1 : 0),
+            draws: beforeScores.draws + (winner ? 0 : 1),
+            sessions: beforeScores.sessions,
+            history: [
+              ...beforeScores.history,
+              { timestamp: new Date().toISOString(), winner, board: updated.board.slice() },
+            ].slice(-50),
+          };
+          setScores(nextScores);
+          saveScores(nextScores);
+          appendAudit({
+            userId: 'AI',
+            action: 'UPDATE',
+            reason: 'Update scoreboard after game end',
+            before: beforeScores,
+            after: nextScores,
+            metadata: { result: winner ?? 'DRAW', difficulty },
+          });
+        }
       } catch (e) {
         const message = e instanceof Error ? e.message : 'Unexpected error';
         setError(message);
@@ -230,6 +353,45 @@ function App() {
 
     return () => clearTimeout(timer);
   }, [mode, difficulty, state, activeUser]);
+
+  // Inline component: signature-confirmed Reset Scores action
+  const SignatureResetScores = ({ onConfirm }) => {
+    const [open, setOpen] = React.useState(false);
+    const [initials, setInitials] = React.useState('');
+    return (
+      <>
+        <button className="ocean-btn error" onClick={() => setOpen(true)} aria-label="Reset scores">
+          Reset Scores
+        </button>
+        {open && (
+          <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Signature confirmation for reset scores">
+            <div className="modal ocean-card">
+              <h3 style={{ marginTop: 0 }}>Confirm reset scores</h3>
+              <p className="subtle">Type your initials to sign and confirm deleting all score history.</p>
+              <input
+                aria-label="Initials for score reset"
+                className="sig-input"
+                placeholder="Your initials"
+                value={initials}
+                onChange={(e) => setInitials(e.target.value)}
+                maxLength={8}
+              />
+              <div className="stack" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
+                <button className="ocean-btn secondary" onClick={() => setOpen(false)}>Cancel</button>
+                <button
+                  className="ocean-btn"
+                  onClick={() => { onConfirm({ initials: initials.trim() }); setOpen(false); setInitials(''); }}
+                  disabled={!initials.trim()}
+                >
+                  Sign & Reset
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
 
   return (
     <div className="center-wrap">
@@ -259,10 +421,15 @@ function App() {
             onChangeMode={(m) => setMode(m)}
             onChangeDifficulty={(d) => setDifficulty(d)}
           />
+          <ScorePanel scores={scores} />
           <div className="ocean-card" style={{ padding: 12 }}>
-            <small className="subtle">
-              Tip: Select identity (X/O). In Human vs AI, the AI plays the opposite mark and moves automatically. New Game clears audit (demo) and starts fresh. Reset preserves turn.
-            </small>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <small className="subtle">
+                Tip: Select identity (X/O). In Human vs AI, the AI plays the opposite mark and moves automatically.
+                New Game clears audit (demo) and starts fresh. Reset preserves turn.
+              </small>
+              <SignatureResetScores onConfirm={handleResetScores} />
+            </div>
           </div>
         </div>
       </div>
