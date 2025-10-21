@@ -11,12 +11,14 @@
 // ============================================================================
 
 import React from 'react';
-import { GameState, Player } from '../types';
+import { GameMode, AIDifficulty, GameState, Player } from '../types';
 
 type StatusBarProps = {
   state: GameState;
   activeUser: Player;
   error?: string | null;
+  mode?: GameMode;
+  difficulty?: AIDifficulty;
 };
 
 /**
@@ -33,7 +35,7 @@ type StatusBarProps = {
  * Throws: never
  * Audit: Display only; not audited.
  */
-export default function StatusBar({ state, activeUser, error }: StatusBarProps) {
+export default function StatusBar({ state, activeUser, error, mode, difficulty }: StatusBarProps) {
   const { nextPlayer, winner, isDraw } = state;
 
   return (
@@ -61,6 +63,18 @@ export default function StatusBar({ state, activeUser, error }: StatusBarProps) 
             </>
           )}
         </div>
+        {mode && (
+          <div className="ocean-badge">
+            <span>Mode</span>
+            <strong>{mode === 'HUMAN_VS_AI' ? 'Human vs AI' : 'Human vs Human'}</strong>
+          </div>
+        )}
+        {mode === 'HUMAN_VS_AI' && difficulty && (
+          <div className="ocean-badge">
+            <span>AI</span>
+            <strong>{difficulty}</strong>
+          </div>
+        )}
       </div>
       {error ? (
         <div className="error-msg" role="alert">

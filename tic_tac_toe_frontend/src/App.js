@@ -24,6 +24,10 @@ import { Board, StatusBar, Controls } from './components';
 
 import { createInitialState, applyMove } from './lib/game';
 import { appendAudit, getAuditLog, clearAudit } from './lib/audit';
+// @ts-ignore - allow TS import in JS env
+import { nextAIMove } from './lib/ai.ts';
+// @ts-ignore
+import { } from './types.d';
 
 /**
  * PUBLIC_INTERFACE
@@ -47,6 +51,12 @@ function App() {
   const [state, setState] = useState(createInitialState());
   // error surface
   const [error, setError] = useState(null);
+
+  // game mode and AI difficulty
+  /** @type {[('HUMAN_VS_HUMAN'|'HUMAN_VS_AI'), Function]} */
+  const [mode, setMode] = useState('HUMAN_VS_HUMAN');
+  /** @type {[('EASY'|'OPTIMAL'), Function]} */
+  const [difficulty, setDifficulty] = useState('EASY');
 
   // on mount: record initial create
   useEffect(() => {
@@ -87,6 +97,13 @@ function App() {
   const onCellClick = (index) => {
     setError(null);
     try {
+      // Disallow human move if it's AI turn in HvAI mode
+      const isHvAI = mode === 'HUMAN_VS_AI';
+      const aiPlaysAs = isHvAI ? (activeUser === 'X' ? 'O' : 'X') : null;
+      if (isHvAI && state.nextPlayer === aiPlaysAs) {
+        throw new Error('Wait for AI move');
+      }
+
       const before = state;
       const updated = applyMove(state, index, activeUser);
       setState(updated);
@@ -175,6 +192,45 @@ function App() {
     }
   };
 
+  // Trigger AI move automatically on AI's turn in HvAI mode.
+  useEffect(() => {
+    const isHvAI = mode === 'HUMAN_VS_AI';
+    if (!isHvAI) return;
+    if (state.gameOver) return;
+
+    const aiPlayer = activeUser === 'X' ? 'O' : 'X';
+    if (state.nextPlayer !== aiPlayer) return;
+
+    const timer = setTimeout(() => {
+      try {
+        const idx = nextAIMove(state.board, aiPlayer, difficulty);
+        const before = state;
+        const updated = applyMove(state, idx, aiPlayer);
+        setState(updated);
+        appendAudit({
+          userId: 'AI',
+          action: 'MOVE',
+          before,
+          after: updated,
+          metadata: { difficulty, index: idx },
+        });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Unexpected error';
+        setError(message);
+        appendAudit({
+          userId: 'AI',
+          action: 'ERROR',
+          reason: message,
+          before: state,
+          after: state,
+          metadata: { difficulty },
+        });
+      }
+    }, 300); // small delay to feel natural
+
+    return () => clearTimeout(timer);
+  }, [mode, difficulty, state, activeUser]);
+
   return (
     <div className="center-wrap">
       <div className="app-container">
@@ -184,7 +240,7 @@ function App() {
         </div>
         <div className="stack-vert">
           <div className="ocean-card" style={{ padding: 16 }}>
-            <StatusBar state={state} activeUser={activeUser} error={error} />
+            <StatusBar state={state} activeUser={activeUser} error={error} mode={mode} difficulty={difficulty} />
             <Board
               board={state.board}
               gameOver={state.gameOver}
@@ -198,10 +254,14 @@ function App() {
             onSwitchUser={switchUser}
             onNewGame={handleNewGame}
             onResetBoard={handleResetBoard}
+            mode={mode}
+            difficulty={difficulty}
+            onChangeMode={(m) => setMode(m)}
+            onChangeDifficulty={(d) => setDifficulty(d)}
           />
           <div className="ocean-card" style={{ padding: 12 }}>
             <small className="subtle">
-              Tip: Select identity (X/O), click a square to play. New Game clears audit (demo) and starts fresh. Reset preserves turn.
+              Tip: Select identity (X/O). In Human vs AI, the AI plays the opposite mark and moves automatically. New Game clears audit (demo) and starts fresh. Reset preserves turn.
             </small>
           </div>
         </div>

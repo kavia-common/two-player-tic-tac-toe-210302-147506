@@ -64,3 +64,15 @@ export interface AuditEntry<T = unknown> {
   after?: T;
   metadata?: Record<string, unknown>;
 }
+
+/**
+ * PUBLIC_INTERFACE
+ * GameMode indicates whether two humans are playing locally or one human vs AI.
+ */
+export type GameMode = 'HUMAN_VS_HUMAN' | 'HUMAN_VS_AI';
+
+/**
+ * PUBLIC_INTERFACE
+ * AI difficulty levels available.
+ */
+export type AIDifficulty = 'EASY' | 'OPTIMAL';

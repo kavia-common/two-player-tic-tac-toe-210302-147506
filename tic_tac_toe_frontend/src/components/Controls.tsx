@@ -11,7 +11,7 @@
 // ============================================================================
 
 import React, { useState } from 'react';
-import { GameState, Player } from '../types';
+import { GameMode, AIDifficulty, GameState, Player } from '../types';
 
 type ControlsProps = {
   state: GameState;
@@ -19,6 +19,10 @@ type ControlsProps = {
   onSwitchUser: (p: Player) => void;
   onNewGame: (signature: { initials: string }) => void;
   onResetBoard: (signature: { initials: string }) => void;
+  mode: GameMode;
+  difficulty: AIDifficulty;
+  onChangeMode: (m: GameMode) => void;
+  onChangeDifficulty: (d: AIDifficulty) => void;
 };
 
 /**
@@ -38,6 +42,10 @@ export default function Controls({
   onSwitchUser,
   onNewGame,
   onResetBoard,
+  mode,
+  difficulty,
+  onChangeMode,
+  onChangeDifficulty,
 }: ControlsProps) {
   const [showModal, setShowModal] = useState<null | 'new' | 'reset'>(null);
   const [initials, setInitials] = useState('');
@@ -71,6 +79,34 @@ export default function Controls({
               Use O
             </button>
           </div>
+
+          <div className="stack" style={{ alignItems: 'center' }}>
+            <label className="subtle" htmlFor="mode-sel">Mode</label>
+            <select
+              id="mode-sel"
+              aria-label="Game mode"
+              value={mode}
+              onChange={(e) => onChangeMode(e.target.value as GameMode)}
+              className="ocean-select"
+            >
+              <option value="HUMAN_VS_HUMAN">Human vs Human</option>
+              <option value="HUMAN_VS_AI">Human vs AI</option>
+            </select>
+
+            <label className="subtle" htmlFor="diff-sel">Difficulty</label>
+            <select
+              id="diff-sel"
+              aria-label="AI difficulty"
+              value={difficulty}
+              onChange={(e) => onChangeDifficulty(e.target.value as AIDifficulty)}
+              className="ocean-select"
+              disabled={mode !== 'HUMAN_VS_AI'}
+            >
+              <option value="EASY">Easy</option>
+              <option value="OPTIMAL">Optimal</option>
+            </select>
+          </div>
+
           <div className="stack">
             <button className="ocean-btn success" onClick={() => setShowModal('new')}>
               New game
@@ -138,6 +174,12 @@ export default function Controls({
               justify-content: space-between;
               gap: 12px;
               flex-wrap: wrap;
+            }
+            .ocean-select {
+              padding: 8px 10px;
+              border-radius: 8px;
+              border: 1px solid rgba(17,24,39,0.12);
+              background: var(--color-surface);
             }
           `}</style>
         </div>
