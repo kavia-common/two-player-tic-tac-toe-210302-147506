@@ -40,6 +40,7 @@ export interface GameState {
  * Audit action types allowed.
  */
 export type AuditAction =
+  // Core CRUD + domain events
   | 'CREATE'
   | 'READ'
   | 'UPDATE'
@@ -49,6 +50,24 @@ export type AuditAction =
   | 'NEW_GAME'
   | 'ERROR'
   | 'SIGN';
+/**
+ * Optional metadata helpers (documentation purpose) for common audit payloads.
+ * These are not enforced at runtime but serve as guidance for consumers.
+ */
+export type AIMoveMetadata = {
+  index: number; // cell index
+  difficulty?: AIDifficulty; // when userId === 'AI'
+};
+
+export type ScoreUpdateMetadata = {
+  result: Player | 'DRAW' | null; // outcome of the game that triggered the update
+  difficulty?: AIDifficulty; // if AI involved, include mode detail
+};
+
+export type ScoreResetMetadata = {
+  signature?: { initials: string }; // bound e-signature details
+  component?: string;
+};
 
 /**
  * PUBLIC_INTERFACE

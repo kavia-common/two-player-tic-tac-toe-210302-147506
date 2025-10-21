@@ -134,7 +134,7 @@ function App() {
         reason: 'Reset scores by user request',
         before: beforeScores,
         after: resetScores,
-        metadata: { component: 'App' },
+        metadata: { component: 'App', signature },
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Unexpected error';
@@ -165,6 +165,7 @@ function App() {
       appendAudit({
         userId: activeUser,
         action: 'MOVE',
+        reason: 'Human move',
         before,
         after: updated,
         metadata: { index },
@@ -189,7 +190,7 @@ function App() {
         appendAudit({
           userId: activeUser,
           action: 'UPDATE',
-          reason: 'Update scoreboard after game end',
+          reason: 'Update scoreboard after game end (Human)',
           before: beforeScores,
           after: nextScores,
           metadata: { result: winner ?? 'DRAW' },
@@ -204,7 +205,7 @@ function App() {
         reason: message,
         before: state,
         after: state,
-        metadata: { index },
+        metadata: { index, context: 'human-move' },
       });
     }
   };
@@ -308,6 +309,7 @@ function App() {
         appendAudit({
           userId: 'AI',
           action: 'MOVE',
+          reason: 'AI move',
           before,
           after: updated,
           metadata: { difficulty, index: idx },
@@ -331,7 +333,7 @@ function App() {
           appendAudit({
             userId: 'AI',
             action: 'UPDATE',
-            reason: 'Update scoreboard after game end',
+            reason: 'Update scoreboard after game end (AI)',
             before: beforeScores,
             after: nextScores,
             metadata: { result: winner ?? 'DRAW', difficulty },
@@ -346,7 +348,7 @@ function App() {
           reason: message,
           before: state,
           after: state,
-          metadata: { difficulty },
+          metadata: { difficulty, context: 'ai-move' },
         });
       }
     }, 300); // small delay to feel natural
